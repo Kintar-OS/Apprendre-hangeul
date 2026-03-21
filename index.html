@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apprendre le Hangeul</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <button class="btn-back hidden" id="btn-back" aria-label="Retour">&#8592;</button>
+    <h1 class="app-title" id="app-title">
+      <span class="title-kr">한글</span> Apprendre le Hangeul
+    </h1>
+  </header>
+
+  <!-- ===== ÉCRAN ACCUEIL ===== -->
+  <main>
+    <section class="screen active" id="screen-home">
+      <p class="intro">Apprenez l'alphabet coréen grâce à des mini-jeux interactifs.</p>
+
+      <div class="difficulty-selector">
+        <label for="difficulty">Niveau :</label>
+        <select id="difficulty">
+          <option value="debutant">Debutant</option>
+          <option value="intermediaire">Intermediaire</option>
+          <option value="avance">Avance</option>
+        </select>
+      </div>
+
+      <div class="card-grid">
+        <button class="card-mode" data-mode="hangul-to-fr">
+          <span class="card-icon">&#xd55c; &rarr; A</span>
+          <span class="card-title">Hangeul &rarr; Prononciation</span>
+          <span class="card-desc">Un caractere s'affiche, tapez sa prononciation.</span>
+        </button>
+        <button class="card-mode" data-mode="fr-to-hangul">
+          <span class="card-icon">A &rarr; &#xd55c;</span>
+          <span class="card-title">Prononciation &rarr; Hangeul</span>
+          <span class="card-desc">Une prononciation s'affiche, choisissez le bon caractere.</span>
+        </button>
+        <button class="card-mode" data-mode="ecoute" id="card-ecoute">
+          <span class="card-icon">&#x1f50a; &rarr; &#xd55c;</span>
+          <span class="card-title">Mode ecoute</span>
+          <span class="card-desc">Ecoutez la prononciation, choisissez le bon caractere.</span>
+          <span class="card-warning hidden" id="ecoute-warning">Voix coreenne non disponible</span>
+        </button>
+      </div>
+
+      <div class="home-links">
+        <button class="btn-secondary" id="btn-reference">Tableau de reference</button>
+        <button class="btn-secondary" id="btn-stats">Statistiques</button>
+      </div>
+    </section>
+
+    <!-- ===== ÉCRAN JEU ===== -->
+    <section class="screen" id="screen-game">
+      <div class="game-header">
+        <div class="game-info">
+          <span class="game-mode-label" id="game-mode-label">Mode</span>
+          <span class="game-difficulty-label" id="game-difficulty-label">Niveau</span>
+        </div>
+        <div class="game-score">
+          <span id="score-display">0 / 0</span>
+          <span class="streak" id="streak-display" title="Serie en cours">&#x1f525; 0</span>
+        </div>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <!-- Zone question -->
+      <div class="question-zone" id="question-zone">
+        <div class="question-char" id="question-char">가</div>
+        <div class="question-text hidden" id="question-text">ga</div>
+        <button class="btn-listen hidden" id="btn-listen-question" aria-label="Ecouter">&#x1f50a;</button>
+      </div>
+
+      <!-- Zone réponse : input texte -->
+      <div class="answer-zone" id="answer-input-zone">
+        <input type="text" id="answer-input" class="answer-input" placeholder="Tapez la prononciation..." autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="btn-primary" id="btn-validate">Valider</button>
+      </div>
+
+      <!-- Zone réponse : QCM -->
+      <div class="answer-zone hidden" id="answer-qcm-zone">
+        <div class="qcm-grid" id="qcm-grid">
+          <button class="btn-qcm" data-index="0"></button>
+          <button class="btn-qcm" data-index="1"></button>
+          <button class="btn-qcm" data-index="2"></button>
+          <button class="btn-qcm" data-index="3"></button>
+        </div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="feedback hidden" id="feedback">
+        <span class="feedback-icon" id="feedback-icon"></span>
+        <span class="feedback-text" id="feedback-text"></span>
+      </div>
+
+      <!-- Bouton suivant -->
+      <button class="btn-primary hidden" id="btn-next">Question suivante</button>
+
+      <!-- Fin de manche -->
+      <div class="round-end hidden" id="round-end">
+        <h2>Manche terminee !</h2>
+        <p class="round-score" id="round-score"></p>
+        <div class="round-actions">
+          <button class="btn-primary" id="btn-replay">Rejouer</button>
+          <button class="btn-secondary" id="btn-home-from-game">Accueil</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ÉCRAN TABLEAU DE RÉFÉRENCE ===== -->
+    <section class="screen" id="screen-reference">
+      <h2>Tableau de reference</h2>
+      <div class="ref-filters">
+        <button class="btn-filter active" data-filter="all">Tout</button>
+        <button class="btn-filter" data-filter="consonne">Consonnes</button>
+        <button class="btn-filter" data-filter="voyelle">Voyelles</button>
+        <button class="btn-filter" data-filter="consonne double">Doubles</button>
+        <button class="btn-filter" data-filter="voyelle composee">Composees</button>
+        <button class="btn-filter" data-filter="syllabe">Syllabes</button>
+      </div>
+      <div class="ref-grid" id="ref-grid">
+        <!-- Rempli dynamiquement -->
+      </div>
+    </section>
+
+    <!-- ===== ÉCRAN STATISTIQUES ===== -->
+    <section class="screen" id="screen-stats">
+      <h2>Statistiques</h2>
+      <div class="stats-summary">
+        <div class="stat-card">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">Questions</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-accuracy">0%</span>
+          <span class="stat-label">Precision</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-best-streak">0</span>
+          <span class="stat-label">Meilleure serie</span>
+        </div>
+      </div>
+
+      <h3>Precision par caractere</h3>
+      <div class="char-stats-grid" id="char-stats-grid">
+        <!-- Rempli dynamiquement -->
+      </div>
+
+      <button class="btn-danger" id="btn-reset-stats">Reinitialiser les statistiques</button>
+    </section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
