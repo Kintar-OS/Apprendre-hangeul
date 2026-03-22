@@ -1,8 +1,0 @@
-{
-  "spinnerTipsEnabled": true,
-  "permissions": {
-    "allow": [
-      "WebFetch(domain:belangue.com)"
-    ]
-  }
-}

@@ -16,6 +16,8 @@
   let currentDifficulty = "debutant";
   let koreanVoice = null;
   let speechAvailable = false;
+  let useFallbackTTS = false;
+  let fallbackAudio = null;
 
   // État de la manche
   let pool = [];
@@ -122,26 +124,34 @@
   }
 
   // ===== WEB SPEECH API =====
+  function enableListening() {
+    speechAvailable = true;
+    els.cardEcoute.classList.remove("disabled");
+    els.ecouteWarning.classList.add("hidden");
+  }
+
   function initSpeech() {
-    if (!("speechSynthesis" in window)) {
-      disableListening();
-      return;
-    }
-
-    function findKoreanVoice() {
-      const voices = speechSynthesis.getVoices();
-      koreanVoice = voices.find((v) => v.lang.startsWith("ko"));
-      if (koreanVoice) {
-        speechAvailable = true;
-        els.cardEcoute.classList.remove("disabled");
-        els.ecouteWarning.classList.add("hidden");
-      } else {
-        disableListening();
+    // Try native Web Speech API first
+    if ("speechSynthesis" in window) {
+      function findKoreanVoice() {
+        const voices = speechSynthesis.getVoices();
+        koreanVoice = voices.find((v) => v.lang.startsWith("ko"));
+        if (koreanVoice) {
+          useFallbackTTS = false;
+          enableListening();
+        }
       }
+
+      speechSynthesis.onvoiceschanged = findKoreanVoice;
+      findKoreanVoice();
     }
 
-    speechSynthesis.onvoiceschanged = findKoreanVoice;
-    findKoreanVoice();
+    // If no native Korean voice found, enable fallback TTS
+    if (!koreanVoice) {
+      useFallbackTTS = true;
+      fallbackAudio = new Audio();
+      enableListening();
+    }
   }
 
   function disableListening() {
@@ -151,13 +161,23 @@
   }
 
   function speak(text) {
-    if (!speechAvailable || !koreanVoice) return;
-    speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.voice = koreanVoice;
-    utter.lang = "ko-KR";
-    utter.rate = SPEECH_RATE;
-    speechSynthesis.speak(utter);
+    if (!speechAvailable) return;
+
+    if (!useFallbackTTS && koreanVoice) {
+      // Native Web Speech API
+      speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.voice = koreanVoice;
+      utter.lang = "ko-KR";
+      utter.rate = SPEECH_RATE;
+      speechSynthesis.speak(utter);
+    } else if (fallbackAudio) {
+      // Fallback: Google Translate TTS
+      fallbackAudio.pause();
+      fallbackAudio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=ko&q=" + encodeURIComponent(text);
+      fallbackAudio.playbackRate = SPEECH_RATE;
+      fallbackAudio.play().catch(function () { /* user gesture required */ });
+    }
   }
 
   // ===== LOCALSTORAGE =====
