@@ -52,6 +52,29 @@
         </button>
       </div>
 
+      <h2 class="section-title">&#x2b50; Mode Expert</h2>
+      <p class="section-sub">Pas de choix multiples : vous devez produire vous-meme la reponse.</p>
+
+      <div class="card-grid">
+        <button class="card-mode" data-mode="expert-pronounce" id="card-expert-pronounce">
+          <span class="card-icon">&#xd55c; &rarr; &#x1f3a4;</span>
+          <span class="card-title">Hangeul &rarr; Prononciation</span>
+          <span class="card-desc">Un caractere s'affiche, prononcez-le en coreen a voix haute.</span>
+          <span class="card-warning hidden" id="expert-pronounce-warning">Reconnaissance vocale non disponible</span>
+        </button>
+        <button class="card-mode" data-mode="expert-fr-to-hangul">
+          <span class="card-icon">A &rarr; &#xd55c;</span>
+          <span class="card-title">Prononciation &rarr; Hangeul</span>
+          <span class="card-desc">Une prononciation s'affiche, ecrivez le caractere en hangeul.</span>
+        </button>
+        <button class="card-mode" data-mode="expert-ecoute" id="card-expert-ecoute">
+          <span class="card-icon">&#x1f50a; &rarr; &#xd55c;</span>
+          <span class="card-title">Ecoute &rarr; Hangeul</span>
+          <span class="card-desc">Ecoutez puis ecrivez le caractere en hangeul.</span>
+          <span class="card-warning hidden" id="expert-ecoute-warning">Voix coreenne non disponible</span>
+        </button>
+      </div>
+
       <div class="home-links">
         <button class="btn-secondary" id="btn-reference">Tableau de reference</button>
         <button class="btn-secondary" id="btn-stats">Statistiques</button>
@@ -98,10 +121,26 @@
         </div>
       </div>
 
+      <!-- Zone réponse : reconnaissance vocale (expert) -->
+      <div class="answer-zone hidden" id="answer-speech-zone">
+        <button class="btn-mic" id="btn-mic" aria-label="Parler">&#x1f3a4;</button>
+        <p class="speech-status" id="speech-status">Appuyez sur le micro puis prononcez le caractere en coreen.</p>
+        <p class="speech-result hidden" id="speech-result"></p>
+      </div>
+
+      <!-- Zone réponse : clavier hangeul (expert) -->
+      <div class="answer-zone hidden" id="answer-hangul-zone">
+        <input type="text" id="hangul-input" class="answer-input hangul-input" placeholder="Ecrivez en hangeul..." readonly>
+        <div class="hangul-keyboard" id="hangul-keyboard"></div>
+        <p class="hangul-hint">Cliquez les touches ou tapez au clavier (disposition coreenne).</p>
+        <button class="btn-primary" id="btn-validate-hangul">Valider</button>
+      </div>
+
       <!-- Feedback -->
       <div class="feedback hidden" id="feedback">
         <span class="feedback-icon" id="feedback-icon"></span>
         <span class="feedback-text" id="feedback-text"></span>
+        <button class="btn-feedback-listen hidden" id="btn-feedback-listen" aria-label="Ecouter la bonne reponse">&#x1f50a;</button>
       </div>
 
       <!-- Bouton suivant -->

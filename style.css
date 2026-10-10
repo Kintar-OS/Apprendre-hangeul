@@ -205,6 +205,20 @@ main {
   margin-top: 0.25rem;
 }
 
+.section-title {
+  text-align: center;
+  color: var(--blue-dark);
+  font-size: 1.2rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.section-sub {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
 .home-links {
   display: flex;
   gap: 1rem;
@@ -435,6 +449,116 @@ main {
   opacity: 0.85;
 }
 
+/* Answer zone - reconnaissance vocale (expert) */
+.btn-mic {
+  background: var(--red-trad);
+  color: #fff;
+  border: none;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  font-size: 2rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow);
+}
+
+.btn-mic:hover {
+  background: var(--red-light);
+  transform: scale(1.05);
+}
+
+.btn-mic:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.btn-mic.recording {
+  background: var(--red-light);
+  animation: micPulse 1s infinite;
+}
+
+@keyframes micPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.6); }
+  70%  { box-shadow: 0 0 0 18px rgba(231, 76, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+.speech-status {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.speech-result {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--blue-dark);
+  text-align: center;
+}
+
+/* Answer zone - clavier hangeul (expert) */
+.hangul-input {
+  font-family: 'Noto Sans KR', sans-serif;
+  letter-spacing: 0.1em;
+  background: #fff;
+  cursor: default;
+}
+
+.hangul-keyboard {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 460px;
+}
+
+.hangul-keyboard .key {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 40px;
+  height: 44px;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.hangul-keyboard .key:hover {
+  border-color: var(--blue-mid);
+  background: #eef2f9;
+}
+
+.hangul-keyboard .key:active {
+  transform: translateY(1px);
+}
+
+.hangul-keyboard .key:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hangul-keyboard .key-vow {
+  color: var(--blue-mid);
+}
+
+.hangul-keyboard .key-back {
+  color: var(--red-trad);
+  width: 52px;
+}
+
+.hangul-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
 /* Feedback */
 .feedback {
   text-align: center;
@@ -467,6 +591,24 @@ main {
 
 .feedback-icon {
   font-size: 1.3rem;
+}
+
+.btn-feedback-listen {
+  background: var(--blue-dark);
+  color: #fff;
+  border: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-feedback-listen:hover {
+  background: var(--blue-mid);
+  transform: scale(1.1);
 }
 
 /* Round end */
