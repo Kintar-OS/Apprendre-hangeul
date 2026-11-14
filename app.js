@@ -19,10 +19,13 @@
 
   // Reconnaissance vocale (mode expert) — Whisper via Transformers.js,
   // 100% dans le navigateur, charge a la demande depuis le CDN Hugging Face.
-  const WHISPER_MODEL = "Xenova/whisper-small";
+  // large-v3-turbo (bien plus precis en coreen) si WebGPU, sinon small en WASM.
+  const WHISPER_MODEL = "onnx-community/whisper-large-v3-turbo";
+  const WHISPER_FALLBACK_MODEL = "Xenova/whisper-small";
   const WHISPER_CDN = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
   let voiceAvailable = false;
   let whisperPipeline = null;
+  let whisperModelName = "";
   let whisperLoading = false;
   let listening = false;
   let mediaStream = null;
@@ -38,6 +41,9 @@
   let bestStreak = 0;
   let answered = false;
   let lastCorrectChar = null;
+  let lastAnswerCorrect = false;
+  let streakBeforeAnswer = 0;
+  let feedbackSpeakTimer = null;
 
   // ===== ÉLÉMENTS DOM =====
   const $ = (id) => document.getElementById(id);
@@ -86,6 +92,7 @@
     feedbackText: $("feedback-text"),
     btnFeedbackListen: $("btn-feedback-listen"),
     btnNext: $("btn-next"),
+    btnRetry: $("btn-retry"),
     roundEnd: $("round-end"),
     roundScore: $("round-score"),
     btnReplay: $("btn-replay"),
@@ -401,21 +408,35 @@
     els.btnMic.disabled = true;
     els.speechStatus.textContent = "Telechargement du modele vocal (une seule fois)...";
 
+    // Progression cumulee sur tous les fichiers du modele (encodeur, decodeur...)
+    const files = {};
     const progress = (p) => {
-      if (p && p.status === "progress" && p.total) {
-        els.speechStatus.textContent = "Telechargement du modele vocal : " + Math.round((p.loaded / p.total) * 100) + "%";
-      }
+      if (!p || p.status !== "progress" || !p.total) return;
+      files[p.file] = { loaded: p.loaded, total: p.total };
+      let loaded = 0, total = 0;
+      Object.values(files).forEach((f) => { loaded += f.loaded; total += f.total; });
+      els.speechStatus.textContent = "Telechargement du modele vocal : " + Math.round((loaded / total) * 100) + "% (" + Math.round(total / 1e6) + " Mo)";
     };
 
     try {
       const tf = await import(WHISPER_CDN);
-      const build = (device) => tf.pipeline("automatic-speech-recognition", WHISPER_MODEL, { device: device, progress_callback: progress });
+      const build = (model, opts) => tf.pipeline("automatic-speech-recognition", model, Object.assign({ progress_callback: progress }, opts));
       try {
-        const device = ("gpu" in navigator) ? "webgpu" : "wasm";
-        whisperPipeline = await build(device);
+        // Le gros modele exige WebGPU avec support fp16 (sinon trop lourd/lent)
+        const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+        if (!adapter || !adapter.features.has("shader-f16")) throw new Error("WebGPU fp16 indisponible");
+        whisperModelName = WHISPER_MODEL;
+        whisperPipeline = await build(WHISPER_MODEL, {
+          device: "webgpu",
+          // Decodeur en fp16 : en q4 il tronque les syllabes coreennes (→ "�")
+          dtype: { encoder_model: "fp16", decoder_model_merged: "fp16" },
+        });
       } catch (gpuErr) {
-        // Repli si WebGPU echoue
-        whisperPipeline = await build("wasm");
+        // Repli : modele plus petit, execute en WASM
+        for (const k in files) delete files[k];
+        console.warn("[whisper] repli sur " + WHISPER_FALLBACK_MODEL + " :", gpuErr);
+        whisperModelName = WHISPER_FALLBACK_MODEL;
+        whisperPipeline = await build(WHISPER_FALLBACK_MODEL, { device: "wasm" });
       }
       els.speechStatus.textContent = "Modele pret. Appuyez sur le micro et prononcez le caractere.";
     } catch (err) {
@@ -474,7 +495,9 @@
       const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || "audio/webm" });
       const audio = await blobToFloat32(blob);
       const out = await whisperPipeline(audio, { language: "korean", task: "transcribe" });
-      const text = (out && out.text ? out.text : "").trim();
+      // Retire les octets UTF-8 orphelins (syllabe tronquee par le decodeur)
+      const text = (out && out.text ? out.text : "").replace(/�/g, "").trim();
+      console.debug("[whisper]", whisperModelName, JSON.stringify(out && out.text));
       const q = questions[currentQuestionIndex];
       const isCorrect = checkSpeech(text, q.char, q.pronFR);
       els.speechResult.textContent = "Entendu : " + (text || "(rien)");
@@ -537,6 +560,16 @@
     stats.chars[char].total++;
     if (correct) stats.chars[char].correct++;
     if (streak > stats.bestStreak) stats.bestStreak = streak;
+    saveStats(stats);
+  }
+
+  // Retire des statistiques une reponse fausse enregistree (essai annule).
+  function cancelWrongAnswer(char) {
+    const stats = loadStats();
+    const c = stats.chars[char];
+    if (!c) return;
+    c.total = Math.max(0, c.total - 1);
+    if (c.total === 0) delete stats.chars[char];
     saveStats(stats);
   }
 
@@ -698,6 +731,7 @@
     els.feedback.classList.remove("correct", "incorrect");
     els.btnFeedbackListen.classList.add("hidden");
     els.btnNext.classList.add("hidden");
+    els.btnRetry.classList.add("hidden");
 
     // Reset QCM buttons
     $$(".btn-qcm").forEach((btn) => {
@@ -874,6 +908,8 @@
     answered = true;
 
     lastCorrectChar = correctItem.char;
+    lastAnswerCorrect = isCorrect;
+    streakBeforeAnswer = streak;
 
     if (isCorrect) {
       score++;
@@ -891,7 +927,7 @@
       // Permet d'ecouter la bonne reponse, et la joue automatiquement
       if (speechAvailable) {
         els.btnFeedbackListen.classList.remove("hidden");
-        setTimeout(() => speak(correctItem.char), 400);
+        feedbackSpeakTimer = setTimeout(() => speak(correctItem.char), 400);
       }
     }
 
@@ -912,12 +948,41 @@
       els.hangulKeyboard.querySelectorAll(".key").forEach((k) => (k.disabled = true));
     }
 
-    // Check if round is over
-    if (currentQuestionIndex >= QUESTIONS_PER_ROUND - 1) {
+    // Mode prononciation : la reconnaissance vocale se trompe parfois, on
+    // propose donc de retenter la question apres une erreur.
+    const canRetry = !isCorrect && currentMode === "expert-pronounce";
+    if (canRetry) els.btnRetry.classList.remove("hidden");
+
+    // Check if round is over (sauf si un nouvel essai reste possible)
+    const isLast = currentQuestionIndex >= QUESTIONS_PER_ROUND - 1;
+    if (isLast && !canRetry) {
       setTimeout(showRoundEnd, 1200);
     } else {
+      els.btnNext.textContent = isLast ? "Voir le resultat" : "Question suivante";
       els.btnNext.classList.remove("hidden");
     }
+  }
+
+  // Annule une reponse vocale fausse et repropose la meme question :
+  // l'essai rate ne compte ni dans le score, ni dans la serie, ni dans les stats.
+  function retryQuestion() {
+    if (!answered || lastAnswerCorrect || currentMode !== "expert-pronounce") return;
+    cancelWrongAnswer(lastCorrectChar);
+    streak = streakBeforeAnswer;
+    answered = false;
+
+    // Coupe la lecture de la bonne reponse pour que le micro ne la capte pas
+    clearTimeout(feedbackSpeakTimer);
+    if (speechAvailable) speechSynthesis.cancel();
+
+    els.scoreDisplay.textContent = score + " / " + currentQuestionIndex;
+    els.streakDisplay.textContent = "🔥 " + streak;
+    els.feedback.classList.add("hidden");
+    els.btnFeedbackListen.classList.add("hidden");
+    els.btnNext.classList.add("hidden");
+    els.btnRetry.classList.add("hidden");
+    els.btnMic.disabled = false;
+    els.speechStatus.textContent = "Nouvel essai : appuyez sur le micro et prononcez le caractere.";
   }
 
   function showRoundEnd() {
@@ -1033,6 +1098,9 @@
 
     // Next question
     els.btnNext.addEventListener("click", nextQuestion);
+
+    // Nouvel essai apres une erreur (mode prononciation)
+    els.btnRetry.addEventListener("click", retryQuestion);
 
     // Listen button in game
     els.btnListenQuestion.addEventListener("click", () => {
