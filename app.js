@@ -19,9 +19,14 @@
 
   // Reconnaissance vocale (mode expert) — Whisper via Transformers.js,
   // 100% dans le navigateur, charge a la demande depuis le CDN Hugging Face.
-  // large-v3-turbo (bien plus precis en coreen) si WebGPU, sinon small en WASM.
-  const WHISPER_MODEL = "onnx-community/whisper-large-v3-turbo";
-  const WHISPER_FALLBACK_MODEL = "Xenova/whisper-small";
+  // PC : large-v3-turbo (bien plus precis en coreen) si WebGPU, sinon small en WASM.
+  // Mobile : base, bien plus leger, pour une analyse rapide.
+  const WHISPER_LARGE = "onnx-community/whisper-large-v3-turbo";
+  const WHISPER_SMALL = "Xenova/whisper-small";
+  const WHISPER_MOBILE = "Xenova/whisper-base";
+  // Une reponse fait au plus quelques syllabes (ex : 쌍기역). Limiter les jetons
+  // coupe court aux phrases inventees par Whisper sur un son bref ou un silence.
+  const WHISPER_MAX_TOKENS = 20;
   const WHISPER_CDN = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
   let voiceAvailable = false;
   let whisperPipeline = null;
@@ -400,6 +405,58 @@
     els.expertPronounceWarning.classList.add("hidden");
   }
 
+  // Telephone ou tablette ? userAgentData (Chrome/Edge sur Android), sinon le
+  // user-agent. Les iPad recents se declarent "Macintosh" : on les repere a
+  // leur ecran tactile.
+  function isMobileDevice() {
+    if (navigator.userAgentData && navigator.userAgentData.mobile) return true;
+    const ua = navigator.userAgent || "";
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+    return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  }
+
+  // Configurations Whisper a essayer selon l'appareil, de la preferee a la
+  // plus sure (la derniere, en WASM, fonctionne partout).
+  async function whisperCandidates() {
+    let adapter = null;
+    try {
+      adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+    } catch (e) { /* WebGPU indisponible */ }
+    const f16 = !!adapter && adapter.features.has("shader-f16");
+
+    if (isMobileDevice()) {
+      // Mobile : modele base (~8x plus leger que large-v3-turbo). Sur le GPU
+      // si possible : le WASM tourne sur un seul coeur sur GitHub Pages.
+      const list = [];
+      if (adapter) {
+        list.push({
+          model: WHISPER_MOBILE,
+          device: "webgpu",
+          dtype: f16
+            ? { encoder_model: "fp16", decoder_model_merged: "fp16" }
+            : { encoder_model: "fp32", decoder_model_merged: "fp32" },
+        });
+      }
+      list.push({ model: WHISPER_MOBILE, device: "wasm" });
+      return list;
+    }
+
+    // PC : le gros modele exige WebGPU avec support fp16 (sinon trop lourd/lent)
+    const list = [];
+    if (f16) {
+      list.push({
+        model: WHISPER_LARGE,
+        device: "webgpu",
+        // Encodeur en q4f16 (370 Mo) : en fp16 il pese 1,27 Go et fait
+        // planter l'onglet (Out of Memory) au chargement sur les PC modestes.
+        // Decodeur en fp16 : en q4 il tronque les syllabes coreennes (→ "�").
+        dtype: { encoder_model: "q4f16", decoder_model_merged: "fp16" },
+      });
+    }
+    list.push({ model: WHISPER_SMALL, device: "wasm" });
+    return list;
+  }
+
   // Charge le modele Whisper a la demande (une seule fois).
   async function ensureWhisper() {
     if (whisperPipeline) return whisperPipeline;
@@ -420,24 +477,25 @@
 
     try {
       const tf = await import(WHISPER_CDN);
-      const build = (model, opts) => tf.pipeline("automatic-speech-recognition", model, Object.assign({ progress_callback: progress }, opts));
-      try {
-        // Le gros modele exige WebGPU avec support fp16 (sinon trop lourd/lent)
-        const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
-        if (!adapter || !adapter.features.has("shader-f16")) throw new Error("WebGPU fp16 indisponible");
-        whisperModelName = WHISPER_MODEL;
-        whisperPipeline = await build(WHISPER_MODEL, {
-          device: "webgpu",
-          // Decodeur en fp16 : en q4 il tronque les syllabes coreennes (→ "�")
-          dtype: { encoder_model: "fp16", decoder_model_merged: "fp16" },
-        });
-      } catch (gpuErr) {
-        // Repli : modele plus petit, execute en WASM
+      const candidates = await whisperCandidates();
+      // Essaie chaque configuration, de la preferee a la plus sure
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
         for (const k in files) delete files[k];
-        console.warn("[whisper] repli sur " + WHISPER_FALLBACK_MODEL + " :", gpuErr);
-        whisperModelName = WHISPER_FALLBACK_MODEL;
-        whisperPipeline = await build(WHISPER_FALLBACK_MODEL, { device: "wasm" });
+        try {
+          whisperModelName = c.model + " (" + c.device + ")";
+          whisperPipeline = await tf.pipeline("automatic-speech-recognition", c.model, {
+            device: c.device,
+            dtype: c.dtype,
+            progress_callback: progress,
+          });
+          break;
+        } catch (loadErr) {
+          if (i === candidates.length - 1) throw loadErr;
+          console.warn("[whisper] echec de " + whisperModelName + ", repli :", loadErr);
+        }
       }
+      console.info("[whisper] modele charge :", whisperModelName);
       els.speechStatus.textContent = "Modele pret. Appuyez sur le micro et prononcez le caractere.";
     } catch (err) {
       whisperPipeline = null;
@@ -494,7 +552,11 @@
     try {
       const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || "audio/webm" });
       const audio = await blobToFloat32(blob);
-      const out = await whisperPipeline(audio, { language: "korean", task: "transcribe" });
+      const out = await whisperPipeline(audio, {
+        language: "korean",
+        task: "transcribe",
+        max_new_tokens: WHISPER_MAX_TOKENS,
+      });
       // Retire les octets UTF-8 orphelins (syllabe tronquee par le decodeur)
       const text = (out && out.text ? out.text : "").replace(/�/g, "").trim();
       console.debug("[whisper]", whisperModelName, JSON.stringify(out && out.text));
